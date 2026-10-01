@@ -3,15 +3,13 @@ import os
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pytgcalls import PyTgCalls
-from pytgcalls.types import VideoPiped, HighQualityVideo
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
 
 # ==================== إعدادات الحساب والبوت ====================
-# قراءة البيانات من متغيرات البيئة في Railway (أو وضعها مباشرة هنا)
 API_ID = int(os.getenv("API_ID", "38935531"))
 API_HASH = os.getenv("API_HASH", "cec4e40653eb3ddf07d541a30cde781e")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
 
-# جلسة الحساب المساعد (ضع كود الجلسة هنا أو كمتغير بيئي SESSION_STRING)
 SESSION_STRING = os.getenv("SESSION_STRING", "your_session_string")
 
 # 1. تشغيل البوت الأساسي (للأوامر والأزرار)
@@ -72,14 +70,13 @@ async def play_custom_video(client, message):
         
         await status_msg.edit_text("🚀 **جاري فتح المكالمة وبث الفيديو بجودة عالية...**")
         
-        await call_py.join_group_call(
+        # استخدام الطريقة الحديثة لتشغيل الوسائط في pytgcalls
+        await call_py.play(
             chat_id,
-            VideoPiped(
+            MediaStream(
                 video_path,
-                width=1280,
-                height=720,
-                framerate=30,
-                video_parameters=HighQualityVideo()
+                video_quality=VideoQuality.HD_720p,
+                audio_quality=AudioQuality.STUDIO
             )
         )
         
@@ -90,7 +87,6 @@ async def play_custom_video(client, message):
     except Exception as e:
         await status_msg.edit_text(f"❌ **حدث خطأ أثناء تشغيل الفيديو:**\n`{str(e)}`")
     finally:
-        # تنظيف الملف المحلي بعد التحميل لتوفير مساحة السيرفر
         if video_path and os.path.exists(video_path):
             try:
                 os.remove(video_path)
@@ -104,15 +100,15 @@ async def callback_handler(client, callback_query):
     
     try:
         if data == "pause_vid":
-            await call_py.pause_stream(chat_id)
+            await call_py.pause(chat_id)
             await callback_query.answer("تم إيقاف الفيديو مؤقتاً ⏸", show_alert=True)
             
         elif data == "resume_vid":
-            await call_py.resume_stream(chat_id)
+            await call_py.resume(chat_id)
             await callback_query.answer("تم استئناف البث ▶️", show_alert=True)
             
         elif data == "stop_vid":
-            await call_py.leave_group_call(chat_id)
+            await call_py.leave(chat_id)
             await callback_query.message.edit_text("⏹ **تم إنهاء المكالمة وإغلاق البث بنجاح.**")
     except Exception as e:
         await callback_query.answer(f"خطأ: {str(e)}", show_alert=True)
