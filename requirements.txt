@@ -1,4 +1,4 @@
-pyrogram==2.0.106
-tgcrypto==1.2.5
-py-tgcalls==1.1.2
+pyrogram
+tgcrypto
+py-tgcalls
 requests
