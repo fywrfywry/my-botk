@@ -2,24 +2,26 @@ import asyncio
 import os
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PhoneNumberInvalid
 from pytgcalls import PyTgCalls
 from pytgcalls.types import VideoPiped, HighQualityVideo
 
-API_ID = int(os.getenv("API_ID", "38935531"))
-API_HASH = os.getenv("API_HASH", "cec4e40653eb3ddf07d541a30cde781e")
+# ضع بيانات الـ API الثابتة هنا لكي لا يطلبها البوت من المستخدم في المحادثة
+DEFAULT_API_ID = 38935531
+DEFAULT_API_HASH = "cec4e40653eb3ddf07d541a30cde781e"
+
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
 
-# تشغيل البوت الأساسي فقط في البداية دون أي أخطاء أو جلسات مسبقة
 bot = Client(
     "bot_session",
-    api_id=API_ID,
-    api_hash=API_HASH,
     bot_token=BOT_TOKEN
 )
 
 user = None
 call_py = None
-waiting_for_session = set()
+
+# قاموس لتتبع خطوات تسجيل الدخول لكل مستخدم
+user_states = {}
 
 control_markup = InlineKeyboardMarkup([
     [
@@ -38,46 +40,132 @@ async def start_cmd(client, message: Message):
         await message.reply("👋 أهلاً بك! البوت والحساب المساعد متصلان وجاهزان للعمل.")
         return
         
-    waiting_for_session.add(message.from_user.id)
+    user_states[message.from_user.id] = {"step": "waiting_phone"}
     await message.reply(
-        "👋 **أهلاً بك يا غالي!**\n\n"
-        "للبدء، يرجى إرسال **كود الجلسة (Session String)** الخاص بك هنا في المحادثة الآن:"
+        "👋 **أهلاً بك في بوت بث الفيديوهات!**\n\n"
+        "لربط الحساب المساعد، يرجى إرسال **رقم هاتفك** مع رمز الدولة (مثال: `+201234567890`):"
     )
 
 @bot.on_message(filters.private & ~filters.command(""))
-async def get_session_input(client, message: Message):
+async def handle_login_steps(client, message: Message):
     global user, call_py
     user_id = message.from_user.id
     
-    if user_id in waiting_for_session:
-        session_text = message.text.strip()
-        waiting_for_session.remove(user_id)
-        
-        status_msg = await message.reply("🔄 جاري التحقق من كود الجلسة وربط الحساب المساعد...")
+    if user_id not in user_states:
+        return
+
+    state_data = user_states[user_id]
+    step = state_data.get("step")
+    text = message.text.strip()
+
+    # الخطوة 1: استقبال رقم الهاتف وإرسال كود التحقق
+    if step == "waiting_phone":
+        status_msg = await message.reply("🔄 جاري الاتصال بتيليجرام وإرسال رمز التحقق...")
         
         try:
-            temp_user = Client(
-                "user_session_dynamic",
-                api_id=API_ID,
-                api_hash=API_HASH,
-                session_string=session_text,
+            temp_client = Client(
+                f"temp_user_{user_id}",
+                api_id=DEFAULT_API_ID,
+                api_hash=DEFAULT_API_HASH,
                 in_memory=True
             )
-            await temp_user.start()
+            await temp_client.connect()
+            sent_code = await temp_client.send_code(text)
             
-            user = temp_user
-            call_py = PyTgCalls(user)
-            await call_py.start()
+            state_data["client"] = temp_client
+            state_data["phone"] = text
+            state_data["phone_code_hash"] = sent_code.phone_code_hash
+            state_data["step"] = "waiting_code"
             
-            await status_msg.edit_text("✅ **تم ربط الحساب المساعد بنجاح تام!**\nالآن يمكنك استخدام البوت في المجموعات وبث الفيديوهات بالأمر `/play`.")
+            await status_msg.edit_text(
+                "📩 **تم إرسال كود التحقق إلى حسابك في تيليجرام.**\n\n"
+                "يرجى إرسال الكود هنا (يمكنك وضع مسافات بين الأرقام أو كتابتها متصلة):"
+            )
+        except PhoneNumberInvalid:
+            await status_msg.edit_text("❌ رقم الهاتف غير صحيح. يرجى إرسال الأمر `/start` والمحاولة مجدداً.")
+            user_states.pop(user_id, None)
         except Exception as e:
-            await status_msg.edit_text(f"❌ كود الجلسة غير صالح أو حدث خطأ:\n`{e}`\n\nأرسل `/start` لإعادة المحاولة.")
+            await status_msg.edit_text(f"❌ حدث خطأ: `{e}`\n\nأرسل الأمر `/start` لإعادة المحاولة.")
+            user_states.pop(user_id, None)
+
+    # الخطوة 2: استقبال كود التحقق (OTP)
+    elif step == "waiting_code":
+        status_msg = await message.reply("🔄 جاري التحقق من الكود وتسجيل الدخول...")
+        temp_client = state_data.get("client")
+        phone = state_data.get("phone")
+        phone_code_hash = state_data.get("phone_code_hash")
+        
+        try:
+            await temp_client.sign_in(phone, phone_code_hash, text)
+            session_string = await temp_client.export_session_string()
+            await temp_client.disconnect()
+            
+            await finalize_user_session(message, session_string, status_msg)
+            user_states.pop(user_id, None)
+            
+        except SessionPasswordNeeded:
+            state_data["step"] = "waiting_password"
+            await status_msg.edit_text(
+                "🔒 **الحساب محمي بالتحقق بخطوتين (كلمة المرور).**\n\n"
+                "يرجى إرسال كلمة مرور الحساب الخاصة بك الآن:"
+            )
+        except PhoneCodeInvalid:
+            await status_msg.edit_text("❌ كود التحقق غير صحيح. يرجى إرسال الكود الصحيح مجدداً:")
+        except Exception as e:
+            await status_msg.edit_text(f"❌ حدث خطأ: `{e}`\n\nأرسل الأمر `/start` لإعادة المحاولة.")
+            user_states.pop(user_id, None)
+
+    # الخطوة 3: استقبال كلمة المرور (التحقق بخطوتين إن وجد)
+    elif step == "waiting_password":
+        status_msg = await message.reply("🔄 جاري التحقق من كلمة المرور...")
+        temp_client = state_data.get("client")
+        
+        try:
+            await temp_client.check_password(text)
+            session_string = await temp_client.export_session_string()
+            await temp_client.disconnect()
+            
+            await finalize_user_session(message, session_string, status_msg)
+            user_states.pop(user_id, None)
+            
+        except Exception as e:
+            await status_msg.edit_text(f"❌ كلمة المرور غير صحيحة أو حدث خطأ: `{e}`\n\nأرسل الأمر `/start` لإعادة المحاولة.")
+            user_states.pop(user_id, None)
+
+async def finalize_user_session(message, session_string, status_msg):
+    global user, call_py
+    try:
+        temp_user = Client(
+            "user_session_dynamic",
+            api_id=DEFAULT_API_ID,
+            api_hash=DEFAULT_API_HASH,
+            session_string=session_string,
+            in_memory=True
+        )
+        await temp_user.start()
+        
+        user = temp_user
+        call_py = PyTgCalls(user)
+        await call_py.start()
+        
+        # يمكنك هنا حفظ الجلسة في ملف نصي إذا أردت ديمومة الحفظ
+        with open("session.txt", "w") as f:
+            f.write(session_string)
+
+        await status_msg.edit_text(
+            "✅ **تم تسجيل الدخول واستخراج الجلسة وربط الحساب المساعد بنجاح تام!**\n\n"
+            "• تم حفظ الجلسة في ملف `session.txt`.\n"
+            "• الآن يمكنك استخدام البوت في المجموعات وبث الفيديوهات بالأمر `/play`.\n\n"
+            f"👇 **كود الجلسة الخاص بك:**\n`{session_string}`"
+        )
+    except Exception as e:
+        await status_msg.edit_text(f"❌ فشل تشغيل الجلسة: `{e}`")
 
 @bot.on_message(filters.command("play") & filters.group)
 async def play_video(client, message):
     global call_py
     if not call_py or not user or not user.is_connected:
-        await message.reply("⚠️ الحساب المساعد غير متصل! يرجى الذهاب إلى محادثة البوت الخاصة وإرسال أمر `/start` لتزويده بكود الجلسة.")
+        await message.reply("⚠️ الحساب المساعد غير متصل! يرجى الذهاب إلى محادثة البوت الخاصة وإرسال أمر `/start` لربطه.")
         return
 
     chat_id = message.chat.id
@@ -125,7 +213,7 @@ async def callbacks(client, cq):
 async def main():
     await bot.start()
     print("-----------------------------------------")
-    print("✨ البوت الأساسي اشتغل بنجاح ولن يحدث خطأ حظر بعد الآن! ✨")
+    print("✨ البوت يعمل الآن ويطلب رقم الهاتف فقط تفاعلياً! ✨")
     print("-----------------------------------------")
     await asyncio.gather(
         asyncio.Event().wait()
