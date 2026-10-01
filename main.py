@@ -3,8 +3,6 @@ import os
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PhoneNumberInvalid
-from pytgcalls import PyTgCalls
-from pytgcalls.types import VideoPiped, HighQualityVideo
 
 API_ID = 37935809
 API_HASH = "1d3dd003e3fed2f81a2eeb1a1436567a"
@@ -19,23 +17,12 @@ bot = Client(
 
 # قاموس لتتبع خطوات تسجيل الدخول الخاصة بكل مستخدم على حدة
 user_states = {}
-active_calls = {}
-
-control_markup = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("⏸ إيقاف مؤقت", callback_data="pause_vid"),
-        InlineKeyboardButton("▶️ استئناف", callback_data="resume_vid"),
-    ],
-    [
-        InlineKeyboardButton("⏹ إنهاء البث", callback_data="stop_vid"),
-    ]
-])
 
 @bot.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message: Message):
     user_states[message.from_user.id] = {"step": "waiting_phone"}
     await message.reply(
-        "👋 **أهلاً بك في بوت بث الفيديوهات العام!**\n\n"
+        "👋 **أهلاً بك في بوت استخراج الجلسات العام!**\n\n"
         "لربط حسابك المساعد واستخراج جلستك الخاصة، يرجى إرسال **رقم هاتفك** مع رمز الدولة فقط (مثال: `+9647701234567`):"
     )
 
@@ -122,7 +109,6 @@ async def handle_login_steps(client, message: Message):
 
 async def finalize_session(message, session_string, status_msg):
     try:
-        # اختبار الجلسة وتشغيلها مؤقتاً للتأكد من سلامتها
         test_user = Client(
             f"test_session_{message.from_user.id}",
             api_id=API_ID,
@@ -135,37 +121,15 @@ async def finalize_session(message, session_string, status_msg):
 
         await status_msg.edit_text(
             "✅ **تم استخراج جلستك بنجاح تام!**\n\n"
-            "• يمكنك الآن استخدام البوت في المجموعات لبث الفيديوهات.\n\n"
             f"👇 **كود الجلسة الخاص بك (احتفظ به سراً):**\n`{session_string}`"
         )
     except Exception as e:
         await status_msg.edit_text(f"❌ فشل تفعيل الجلسة: `{e}`")
 
-@bot.on_message(filters.command("play") & filters.group)
-async def play_video(client, message):
-    chat_id = message.chat.id
-    if not message.reply_to_message or not message.reply_to_message.video:
-        await message.reply("⚠️ يجب الرد على ملف فيديو بالأمر `/play`.")
-        return
-
-    # ملاحظة: لبث حقيقي لكل مجموعة، يتم ربط مكالمة PyTgCalls بالعميل الخاص بالمجموعة
-    status_msg = await message.reply("📥 جاري تجهيز الفيديو وبثه...")
-    video_path = None
-    try:
-        video_path = await message.reply_to_message.download()
-        # محاكاة وتشغيل البث
-        await status_msg.edit_text("🎬 **تم بدء بث الفيديو في المكالمة بنجاح!**", reply_markup=control_markup)
-    except Exception as e:
-        await status_msg.edit_text(f"❌ حدث خطأ أثناء البث: `{e}`")
-    finally:
-        if video_path and os.path.exists(video_path):
-            try: os.remove(video_path)
-            except: pass
-
 async def main():
     await bot.start()
     print("-----------------------------------------")
-    print("✨ السورس العام يعمل الآن بنجاح تام! ✨")
+    print("✨ البوت يعمل الآن بنجاح تام! ✨")
     print("-----------------------------------------")
     await asyncio.gather(asyncio.Event().wait())
 
