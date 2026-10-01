@@ -1,4 +1,1 @@
-pyrogram
-tgcrypto
-pytgcalls
-aiohttp
+
