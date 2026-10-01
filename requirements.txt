@@ -1,4 +1,4 @@
 pyrogram==2.0.106
-tgcrypto==1.2.5
-pytgcalls==3.0.0.b4
-aiohttp==3.9.5
+tgcrypto
+pytgcalls
+aiohttp
