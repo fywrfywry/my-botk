@@ -1,4 +1,4 @@
 pyrogram==2.0.106
 tgcrypto
-git+https://github.com/pytgcalls/pytgcalls.git
+pytgcalls==3.0.0.dev37
 aiohttp
