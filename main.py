@@ -17,10 +17,8 @@ bot = Client(
     bot_token=BOT_TOKEN
 )
 
-# قاموس لتتبع خطوات تسجيل الدخول الخاصة بكل مستخدم
 user_states = {}
 
-# أزرار التحكم بالبث
 control_markup = InlineKeyboardMarkup([
     [
         InlineKeyboardButton("⏸ إيقاف مؤقت", callback_data="pause_vid"),
@@ -130,7 +128,6 @@ async def finalize_session(message, session_string, status_msg):
     except Exception as e:
         await status_msg.edit_text(f"❌ فشل تفعيل الجلسة: `{e}`")
 
-# أمر بث الفيديو في المكالمة (بالرد على الفيديو)
 @bot.on_message(filters.command("play") & (filters.group | filters.channel))
 async def play_video(client, message: Message):
     if not message.reply_to_message or not message.reply_to_message.video:
@@ -140,10 +137,7 @@ async def play_video(client, message: Message):
     status_msg = await message.reply("📥 جاري تحميل الفيديو وتجهيز البث المرئي...")
     video_path = None
     try:
-        # تحميل الفيديو المرسل
         video_path = await message.reply_to_message.download()
-        
-        # رسالة نجاح البث التفاعلية
         await status_msg.edit_text(
             "🎬 **تم بدء بث الفيديو في المكالمة/القناة بنجاح!**\n\n• يمكنك استخدام أزرار التحكم أدناه:",
             reply_markup=control_markup
@@ -151,13 +145,12 @@ async def play_video(client, message: Message):
     except Exception as e:
         await status_msg.edit_text(f"❌ حدث خطأ أثناء بدء البث: `{e}`")
     finally:
-        # تنظيف الملف المحمل بعد فترة أو الاحتفاظ به مؤقتاً
         pass
 
 async def main():
     await bot.start()
     print("-----------------------------------------")
-    print("✨ بوت البث واستخراج الجلسات يعمل بكامل ميزاته! ✨")
+    print("✨ البوت يعمل الآن بنجاح تام! ✨")
     print("-----------------------------------------")
     await asyncio.gather(asyncio.Event().wait())
 
