@@ -1,5 +1,5 @@
-pyrogram>=2.0.0
+pyrogram
+tgcrypto
 ntgcalls
 pytgcalls
-tgcrypto
 aiohttp
