@@ -2,7 +2,7 @@ import asyncio
 import os
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PhoneNumberInvalid
+from pyrogram.errors import SessionPasswordNeeded
 from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream
 
@@ -26,10 +26,6 @@ main_menu = InlineKeyboardMarkup([
 
 control_markup = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("⏸ إيقاف مؤقت", callback_data="pause_vid"),
-        InlineKeyboardButton("▶️️ استئناف", callback_data="resume_vid"),
-    ],
-    [
         InlineKeyboardButton("⏹ إنهاء البث", callback_data="stop_vid"),
     ]
 ])
@@ -39,7 +35,6 @@ async def start_cmd(client, message: Message):
     user_states.pop(message.from_user.id, None)
     await message.reply(
         "👋 **أهلاً بك في بوت البث المباشر عبر الحساب الشخصي!**\n\n"
-        "هذا البوت يتيح لك ربط حسابك وبث الفيديوهات مباشرة في قنواتك ومجموعاتك.\n"
         "اختر ما ترغب به:",
         reply_markup=main_menu
     )
@@ -59,7 +54,7 @@ async def callback_handler(client, callback_query):
         user_states[user_id] = {"step": "waiting_session_for_broadcast"}
         await callback_query.message.edit_text(
             "🔑 **إعداد البث عبر حسابك:**\n\n"
-            "للبدء، أرسل أولاً **كود الجلسة (Session String)** الخاص بحسابك المساعد:"
+            "أرسل أولاً **كود الجلسة (Session String)** الخاص بحسابك:"
         )
     elif data == "stop_vid":
         await callback_query.answer("تم إنهاء البث.", show_alert=True)
@@ -75,7 +70,6 @@ async def handle_all_steps(client, message: Message):
     step = state_data.get("step")
     text = message.text.strip() if message.text else ""
 
-    # --- خطوات استخراج الجلسة العادية ---
     if step == "waiting_phone":
         status_msg = await message.reply("🔄 جاري الاتصال بتيليجرام وإرسال رمز التحقق...")
         try:
@@ -86,9 +80,9 @@ async def handle_all_steps(client, message: Message):
             state_data["phone"] = text
             state_data["phone_code_hash"] = sent_code.phone_code_hash
             state_data["step"] = "waiting_code"
-            await status_msg.edit_text("📩 **تم إرسال كود التحقق إلى حسابك.** أرسل الكود هنا:")
+            await status_msg.edit_text("📩 **تم إرسال كود التحقق.** أرسل الكود هنا:")
         except Exception as e:
-            await status_msg.edit_text(f"❌ حدث خطأ: `{e}`\n\nأرسل `/start` للعودة.")
+            await status_msg.edit_text(f"❌ حدث خطأ: `{e}`")
             user_states.pop(user_id, None)
 
     elif step == "waiting_code":
@@ -102,9 +96,9 @@ async def handle_all_steps(client, message: Message):
             user_states.pop(user_id, None)
         except SessionPasswordNeeded:
             state_data["step"] = "waiting_password"
-            await status_msg.edit_text("🔒 **الحساب محمي بكلمة مرور (تحقق بخطوتين).** أرسل كلمة المرور:")
+            await status_msg.edit_text("🔒 **الحساب محمي بكلمة مرور.** أرسل كلمة المرور:")
         except Exception as e:
-            await status_msg.edit_text(f"❌ خطأ: `{e}`\n\nأرسل `/start` للعودة.")
+            await status_msg.edit_text(f"❌ خطأ: `{e}`")
             user_states.pop(user_id, None)
 
     elif step == "waiting_password":
@@ -117,40 +111,31 @@ async def handle_all_steps(client, message: Message):
             await status_msg.edit_text(f"✅ **تم استخراج جلستك بنجاح:**\n\n`{session_string}`")
             user_states.pop(user_id, None)
         except Exception as e:
-            await status_msg.edit_text(f"❌ كلمة المرور خاطئة: `{e}`\n\nأرسل `/start` للعودة.")
+            await status_msg.edit_text(f"❌ كلمة المرور خاطئة: `{e}`")
             user_states.pop(user_id, None)
 
-    # --- خطوات إعداد وبدء البث عبر حساب المستخدم ---
     elif step == "waiting_session_for_broadcast":
         state_data["session_string"] = text
         state_data["step"] = "waiting_chat_id"
-        await message.reply(
-            "✅ تم حفظ الجلسة.\n\n"
-            "📍 **الآن أرسل معرف القناة أو المجموعة** التي تريد البث فيها (مثال: `@YourChannel` أو الرابط):"
-        )
+        await message.reply("✅ تم حفظ الجلسة.\n\n📍 **أرسل معرف القناة أو المجموعة** (مثال: `@styleio`):")
 
     elif step == "waiting_chat_id":
         state_data["chat_id"] = text
         state_data["step"] = "waiting_video_for_broadcast"
-        await message.reply(
-            f"✅ تم حفظ القناة: `{text}`\n\n"
-            "📥 **الخطوة الأخيرة: أرسل الآن ملف الفيديو (Video) الذي تريد بثه من حسابك:**"
-        )
+        await message.reply(f"✅ تم حفظ القناة: `{text}`\n\n📥 **الخطوة الأخيرة: أرسل ملف الفيديو (Video) الآن:**")
 
     elif step == "waiting_video_for_broadcast":
         if not message.video and not message.document:
-            await message.reply("⚠️️ يرجى إرسال ملف فيديو صحيح.")
+            await message.reply("⚠ يرجى إرسال ملف فيديو صحيح.")
             return
 
-        status_msg = await message.reply("🔄 جاري تسجيل الدخول بحسابك، فتح المكالمة، وبدء البث...")
+        status_msg = await message.reply("🔄 جاري تسجيل الدخول بحسابك وبدء البث المباشر...")
         session_str = state_data.get("session_string")
         chat_id = state_data.get("chat_id")
 
         try:
-            # تحميل الفيديو المؤقت
             video_path = await message.download()
 
-            # تشغيل عميل المستخدم الحقيقي والبث من خلاله
             user_client = Client(
                 f"broadcaster_{user_id}",
                 api_id=API_ID,
@@ -160,34 +145,34 @@ async def handle_all_steps(client, message: Message):
             )
             await user_client.start()
 
-            # تهيئة عميل الاتصال الصوتي والمرئي (PyTgCalls) لحسابك
             call_client = PyTgCalls(user_client)
             await call_client.start()
 
-            # الانضمام للمكالمة وبث الفيديو باستخدام جلسة حسابك
+            # الانضمام للمكالمة وبث الفيديو مباشرة
             await call_client.join(
                 chat_id,
                 MediaStream(video_path)
             )
 
             await status_msg.edit_text(
-                f"🎬 **تم بدء البث المباشر بنجاح من حسابك في القناة/المجموعة:**\n`{chat_id}`\n\n"
-                "• البث يعمل الآن عبر حسابك الشخصي.",
+                f"🎬 **تم بدء البث المباشر بنجاح من حسابك في القناة:**\n`{chat_id}`",
                 reply_markup=control_markup
             )
             
-            # الاحتفاظ بالعملاء للتحكم لاحقاً إذا لزم الأمر
             state_data["call_client"] = call_client
             state_data["user_client"] = user_client
 
         except Exception as e:
-            await status_msg.edit_text(f"❌ حدث خطأ أثناء بدء البث من حسابك: `{e}`\n\nتأكد أن حسابك مشرف ولديه صلاحية المكالمات.")
+            await status_msg.edit_text(
+                f"❌ حدث خطأ أثناء تشغيل البث:\n`{e}`\n\n"
+                "ملاحظة: تأكد من بدء المكالمة المرئية (Voice/Video Chat) يدوياً في القناة أولاً قبل إرسال الفيديو، أو تأكد من صحة معرف القناة."
+            )
             user_states.pop(user_id, None)
 
 async def main():
     await bot.start()
     print("-----------------------------------------")
-    print("✨ بوت البث بالحسابات الشخصية يعمل بنجاح! ✨")
+    print("✨ البوت يعمل بكامل ميزاته بنجاح! ✨")
     print("-----------------------------------------")
     await asyncio.gather(asyncio.Event().wait())
 
