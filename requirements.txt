@@ -1,3 +1,4 @@
 pyrogram
-pytgcalls
-Tgcrypto
+pytgcalls>=1.0.0
+tgcrypto
+aiohttp
