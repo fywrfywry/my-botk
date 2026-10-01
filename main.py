@@ -8,7 +8,7 @@ from pytgcalls.types import VideoPiped, HighQualityVideo
 API_ID = int(os.getenv("API_ID", "38935531"))
 API_HASH = os.getenv("API_HASH", "cec4e40653eb3ddf07d541a30cde781e")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
-SESSION_STRING = os.getenv("SESSION_STRING", "your_session_string")
+SESSION_STRING = os.getenv("SESSION_STRING", "")
 
 bot = Client(
     "bot_session",
@@ -88,7 +88,6 @@ async def main():
     print("✨ تم تشغيل بوت المكالمات بنجاح تام وثابت! ✨")
     print("-----------------------------------------")
     
-    # إبقاء البوت قيد التشغيل بشكل دائم وآمن
     await asyncio.gather(
         asyncio.Event().wait()
     )
