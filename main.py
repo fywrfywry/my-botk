@@ -10,7 +10,6 @@ API_HASH = os.getenv("API_HASH", "cec4e40653eb3ddf07d541a30cde781e")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
 SESSION_STRING = os.getenv("SESSION_STRING", "your_session_string")
 
-# إزالة in_memory لتجنب خطأ الـ buffer واستخدام ملفات جلسات نظيفة
 bot = Client(
     "bot_session",
     api_id=API_ID,
@@ -45,7 +44,7 @@ async def start_cmd(client, message):
 async def play_video(client, message):
     chat_id = message.chat.id
     if not message.reply_to_message or not message.reply_to_message.video:
-        await message.reply("⚠️️ يجب الرد على ملف فيديو بالأمر `/play`.")
+        await message.reply("⚠️ يجب الرد على ملف فيديو بالأمر `/play`.")
         return
 
     status_msg = await message.reply("📥 جاري تحميل الفيديو وبثه...")
@@ -81,7 +80,6 @@ async def callbacks(client, cq):
         await cq.answer(f"خطأ: {e}", show_alert=True)
 
 async def main():
-    # تشغيل العملاء بالطريقة الآمنة والصحيحة داخل حلقة الأحداث
     await bot.start()
     await user.start()
     await call_py.start()
@@ -90,7 +88,14 @@ async def main():
     print("✨ تم تشغيل بوت المكالمات بنجاح تام وثابت! ✨")
     print("-----------------------------------------")
     
-    await asyncio.Event().wait()
+    # إبقاء البوت قيد التشغيل بشكل دائم وآمن
+    await asyncio.gather(
+        asyncio.Event().wait()
+    )
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
+    except KeyboardInterrupt:
+        pass
