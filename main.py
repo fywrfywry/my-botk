@@ -10,21 +10,19 @@ API_HASH = os.getenv("API_HASH", "cec4e40653eb3ddf07d541a30cde781e")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
 SESSION_STRING = os.getenv("SESSION_STRING", "your_session_string")
 
-# استخدام MemoryStorage لتجنب مشاكل الملفات المؤقتة على الخوادم السحابية
+# إزالة in_memory لتجنب خطأ الـ buffer واستخدام ملفات جلسات نظيفة
 bot = Client(
-    "MainBot",
+    "bot_session",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BOT_TOKEN,
-    in_memory=True
+    bot_token=BOT_TOKEN
 )
 
 user = Client(
-    "UserBot",
+    "user_session",
     api_id=API_ID,
     api_hash=API_HASH,
-    session_string=SESSION_STRING,
-    in_memory=True
+    session_string=SESSION_STRING
 )
 
 call_py = PyTgCalls(user)
@@ -47,7 +45,7 @@ async def start_cmd(client, message):
 async def play_video(client, message):
     chat_id = message.chat.id
     if not message.reply_to_message or not message.reply_to_message.video:
-        await message.reply("⚠️ يجب الرد على ملف فيديو بالأمر `/play`.")
+        await message.reply("⚠️️ يجب الرد على ملف فيديو بالأمر `/play`.")
         return
 
     status_msg = await message.reply("📥 جاري تحميل الفيديو وبثه...")
@@ -83,9 +81,7 @@ async def callbacks(client, cq):
         await cq.answer(f"خطأ: {e}", show_alert=True)
 
 async def main():
-    # التأكد من وجود حلقة أحداث فعالة وربطها بشكل صحيح
-    loop = asyncio.get_running_loop()
-    
+    # تشغيل العملاء بالطريقة الآمنة والصحيحة داخل حلقة الأحداث
     await bot.start()
     await user.start()
     await call_py.start()
@@ -97,7 +93,4 @@ async def main():
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("تم إيقاف البوت يدويياً.")
+    asyncio.run(main())
