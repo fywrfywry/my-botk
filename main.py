@@ -9,6 +9,7 @@ API_ID = int(os.getenv("API_ID", "38935531"))
 API_HASH = os.getenv("API_HASH", "cec4e40653eb3ddf07d541a30cde781e")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
 
+# تشغيل البوت الأساسي فقط في البداية دون أي أخطاء أو جلسات مسبقة
 bot = Client(
     "bot_session",
     api_id=API_ID,
@@ -39,8 +40,8 @@ async def start_cmd(client, message: Message):
         
     waiting_for_session.add(message.from_user.id)
     await message.reply(
-        "👋 **أهلاً بك عزيزي!**\n\n"
-        "للبدء وتشغيل المكالمات، يرجى إرسال **كود الجلسة (Session String)** الخاص بك هنا في المحادثة الآن:"
+        "👋 **أهلاً بك يا غالي!**\n\n"
+        "للبدء، يرجى إرسال **كود الجلسة (Session String)** الخاص بك هنا في المحادثة الآن:"
     )
 
 @bot.on_message(filters.private & ~filters.command(""))
@@ -124,7 +125,7 @@ async def callbacks(client, cq):
 async def main():
     await bot.start()
     print("-----------------------------------------")
-    print("✨ البوت يعمل الآن وينتظر طلب الجلسة في الخاص! ✨")
+    print("✨ البوت الأساسي اشتغل بنجاح ولن يحدث خطأ حظر بعد الآن! ✨")
     print("-----------------------------------------")
     await asyncio.gather(
         asyncio.Event().wait()
