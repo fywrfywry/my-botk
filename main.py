@@ -1,16 +1,13 @@
 import asyncio
 import os
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pytgcalls import PyTgCalls
 from pytgcalls.types import VideoPiped, HighQualityVideo
 
 API_ID = int(os.getenv("API_ID", "38935531"))
 API_HASH = os.getenv("API_HASH", "cec4e40653eb3ddf07d541a30cde781e")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
-
-# قراءة جلسة المستخدم من المتغيرات إن وجدت
-SESSION_STRING = os.getenv("SESSION_STRING", "")
 
 bot = Client(
     "bot_session",
@@ -19,9 +16,9 @@ bot = Client(
     bot_token=BOT_TOKEN
 )
 
-# متغير عام لحفظ العميل المساعد إذا تم إدخاله تفاعلياً
 user = None
 call_py = None
+waiting_for_session = set()
 
 control_markup = InlineKeyboardMarkup([
     [
@@ -33,51 +30,53 @@ control_markup = InlineKeyboardMarkup([
     ]
 ])
 
-@bot.on_message(filters.command("start") & filters.group)
-async def start_cmd(client, message):
-    global user, call_py
-    if not user or not user.is_connected:
-        await message.reply("⚠️ **تنبيه:** الحساب المساعد (UserBot) غير متصل حالياً لأنه لم يتم إعداد `SESSION_STRING`.\nيرجى إرسال أمر `/set_session [الكود]` بالخاص أو التأكد من إضافته في Railway.")
-    else:
-        await message.reply("👋 **مرحباً بك! البوت يعمل الآن بكفاءة تامة ومع المتصل المساعد.**\nأرسل `/play` بالرد على فيديو لبثه في المكالمة.")
-
-# أمر جديد لتحديث الجلسة تفاعلياً من داخل تيليجرام
-@bot.on_message(filters.command("set_session") & filters.private)
-async def set_session_cmd(client, message):
-    global user, call_py
-    args = message.text.split(maxsplit=1)
-    if len(args) < 2:
-        await message.reply("⚠️ يرجى إرسال الأمر مع كود الجلسة هكذا:\n`/set_session AgJSG...`")
+@bot.on_message(filters.command("start") & filters.private)
+async def start_cmd(client, message: Message):
+    global user
+    if user and user.is_connected:
+        await message.reply("👋 أهلاً بك! البوت والحساب المساعد متصلان وجاهزان للعمل.")
         return
-    
-    new_session = args[1].strip()
-    status_msg = await message.reply("🔄 جاري التحقق من كود الجلسة وربط الحساب المساعد...")
-    
-    try:
-        # إنشاء وتشغيل جلسة المستخدم المؤقتة للتحقق
-        temp_user = Client(
-            "user_session_dynamic",
-            api_id=API_ID,
-            api_hash=API_HASH,
-            session_string=new_session,
-            in_memory=True
-        )
-        await temp_user.start()
         
-        # إذا نجح الاتصال، نعتمده
-        user = temp_user
-        call_py = PyTgCalls(user)
-        await call_py.start()
+    waiting_for_session.add(message.from_user.id)
+    await message.reply(
+        "👋 **أهلاً بك عزيزي!**\n\n"
+        "للبدء وتشغيل المكالمات، يرجى إرسال **كود الجلسة (Session String)** الخاص بك هنا في المحادثة الآن:"
+    )
+
+@bot.on_message(filters.private & ~filters.command(""))
+async def get_session_input(client, message: Message):
+    global user, call_py
+    user_id = message.from_user.id
+    
+    if user_id in waiting_for_session:
+        session_text = message.text.strip()
+        waiting_for_session.remove(user_id)
         
-        await status_msg.edit_text("✅ **تم ربط الحساب المساعد وتفعيل المكالمات بنجاح تام!**")
-    except Exception as e:
-        await status_msg.edit_text(f"❌ كود الجلسة غير صالح أو حدث خطأ:\n`{e}`")
+        status_msg = await message.reply("🔄 جاري التحقق من كود الجلسة وربط الحساب المساعد...")
+        
+        try:
+            temp_user = Client(
+                "user_session_dynamic",
+                api_id=API_ID,
+                api_hash=API_HASH,
+                session_string=session_text,
+                in_memory=True
+            )
+            await temp_user.start()
+            
+            user = temp_user
+            call_py = PyTgCalls(user)
+            await call_py.start()
+            
+            await status_msg.edit_text("✅ **تم ربط الحساب المساعد بنجاح تام!**\nالآن يمكنك استخدام البوت في المجموعات وبث الفيديوهات بالأمر `/play`.")
+        except Exception as e:
+            await status_msg.edit_text(f"❌ كود الجلسة غير صالح أو حدث خطأ:\n`{e}`\n\nأرسل `/start` لإعادة المحاولة.")
 
 @bot.on_message(filters.command("play") & filters.group)
 async def play_video(client, message):
     global call_py
-    if not call_py:
-        await message.reply("⚠️ الحساب المساعد لم يتم ربطه بعد! يرجى إرسال كود الجلسة للبوت أولاً.")
+    if not call_py or not user or not user.is_connected:
+        await message.reply("⚠️ الحساب المساعد غير متصل! يرجى الذهاب إلى محادثة البوت الخاصة وإرسال أمر `/start` لتزويده بكود الجلسة.")
         return
 
     chat_id = message.chat.id
@@ -123,29 +122,10 @@ async def callbacks(client, cq):
         await cq.answer(f"خطأ: {e}", show_alert=True)
 
 async def main():
-    global user, call_py
     await bot.start()
-    
-    # محاولة التشغيل التلقائي لو وُجد المتغير مسبقاً
-    if SESSION_STRING:
-        try:
-            user = Client(
-                "user_session",
-                api_id=API_ID,
-                api_hash=API_HASH,
-                session_string=SESSION_STRING
-            )
-            await user.start()
-            call_py = PyTgCalls(user)
-            await call_py.start()
-            print("✨ تم تشغيل الحساب المساعد تلقائياً من المتغيرات.")
-        except Exception as e:
-            print(f"⚠️ فشل التشغيل التلقائي للجلسة: {e}")
-
     print("-----------------------------------------")
-    print("✨ يعمل البوت الأساسي وجاهز لتلقي الأوامر! ✨")
+    print("✨ البوت يعمل الآن وينتظر طلب الجلسة في الخاص! ✨")
     print("-----------------------------------------")
-    
     await asyncio.gather(
         asyncio.Event().wait()
     )
