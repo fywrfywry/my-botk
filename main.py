@@ -148,7 +148,6 @@ async def handle_all_steps(client, message: Message):
             call_client = PyTgCalls(user_client)
             await call_client.start()
 
-            # الانضمام للمكالمة وبث الفيديو مباشرة
             await call_client.join(
                 chat_id,
                 MediaStream(video_path)
@@ -165,7 +164,7 @@ async def handle_all_steps(client, message: Message):
         except Exception as e:
             await status_msg.edit_text(
                 f"❌ حدث خطأ أثناء تشغيل البث:\n`{e}`\n\n"
-                "ملاحظة: تأكد من بدء المكالمة المرئية (Voice/Video Chat) يدوياً في القناة أولاً قبل إرسال الفيديو، أو تأكد من صحة معرف القناة."
+                "تأكد من فتح المكالمة المرئية في القناة يدوياً أولاً، أو تأكد من صحة معرف القناة."
             )
             user_states.pop(user_id, None)
 
