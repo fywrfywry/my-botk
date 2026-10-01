@@ -6,21 +6,24 @@ from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PhoneNumber
 from pytgcalls import PyTgCalls
 from pytgcalls.types import VideoPiped, HighQualityVideo
 
-# ضع بيانات الـ API الثابتة هنا لكي لا يطلبها البوت من المستخدم في المحادثة
-DEFAULT_API_ID = 38935531
-DEFAULT_API_HASH = "cec4e40653eb3ddf07d541a30cde781e"
+# بيانات الـ API التي استخرجتها من موقع تيليجرام
+API_ID = 37935809
+API_HASH = "1d3dd003e3fed2f81a2eeb1a1436567a"
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8822269103:AAE3yUcxj4uWPEarNhh29aPLnWh5olMjypc")
+# توكن البوت الجديد الذي أرسلته
+BOT_TOKEN = "8170529805:AAH2bZOEdP7VWmKaHLAl4JYTi5A1maCERjw"
 
 bot = Client(
     "bot_session",
+    api_id=API_ID,
+    api_hash=API_HASH,
     bot_token=BOT_TOKEN
 )
 
 user = None
 call_py = None
 
-# قاموس لتتبع خطوات تسجيل الدخول لكل مستخدم
+# قاموس لتتبع خطوات تسجيل الدخول
 user_states = {}
 
 control_markup = InlineKeyboardMarkup([
@@ -43,7 +46,7 @@ async def start_cmd(client, message: Message):
     user_states[message.from_user.id] = {"step": "waiting_phone"}
     await message.reply(
         "👋 **أهلاً بك في بوت بث الفيديوهات!**\n\n"
-        "لربط الحساب المساعد، يرجى إرسال **رقم هاتفك** مع رمز الدولة (مثال: `+201234567890`):"
+        "لربط الحساب المساعد، يرجى إرسال **رقم هاتفك** مع رمز الدولة فقط (مثال: `+201234567890`):"
     )
 
 @bot.on_message(filters.private & ~filters.command(""))
@@ -65,8 +68,8 @@ async def handle_login_steps(client, message: Message):
         try:
             temp_client = Client(
                 f"temp_user_{user_id}",
-                api_id=DEFAULT_API_ID,
-                api_hash=DEFAULT_API_HASH,
+                api_id=API_ID,
+                api_hash=API_HASH,
                 in_memory=True
             )
             await temp_client.connect()
@@ -79,7 +82,7 @@ async def handle_login_steps(client, message: Message):
             
             await status_msg.edit_text(
                 "📩 **تم إرسال كود التحقق إلى حسابك في تيليجرام.**\n\n"
-                "يرجى إرسال الكود هنا (يمكنك وضع مسافات بين الأرقام أو كتابتها متصلة):"
+                "يرجى إرسال الكود هنا الآن:"
             )
         except PhoneNumberInvalid:
             await status_msg.edit_text("❌ رقم الهاتف غير صحيح. يرجى إرسال الأمر `/start` والمحاولة مجدداً.")
@@ -88,9 +91,9 @@ async def handle_login_steps(client, message: Message):
             await status_msg.edit_text(f"❌ حدث خطأ: `{e}`\n\nأرسل الأمر `/start` لإعادة المحاولة.")
             user_states.pop(user_id, None)
 
-    # الخطوة 2: استقبال كود التحقق (OTP)
+    # الخطوة 2: استقبال كود التحقق واستخراج الجلسة تلقائياً
     elif step == "waiting_code":
-        status_msg = await message.reply("🔄 جاري التحقق من الكود وتسجيل الدخول...")
+        status_msg = await message.reply("🔄 جاري التحقق من الكود واستخراج الجلسة...")
         temp_client = state_data.get("client")
         phone = state_data.get("phone")
         phone_code_hash = state_data.get("phone_code_hash")
@@ -115,9 +118,9 @@ async def handle_login_steps(client, message: Message):
             await status_msg.edit_text(f"❌ حدث خطأ: `{e}`\n\nأرسل الأمر `/start` لإعادة المحاولة.")
             user_states.pop(user_id, None)
 
-    # الخطوة 3: استقبال كلمة المرور (التحقق بخطوتين إن وجد)
+    # الخطوة 3: استقبال كلمة المرور إن وجدت
     elif step == "waiting_password":
-        status_msg = await message.reply("🔄 جاري التحقق من كلمة المرور...")
+        status_msg = await message.reply("🔄 جاري التحقق من كلمة المرور واستخراج الجلسة...")
         temp_client = state_data.get("client")
         
         try:
@@ -137,8 +140,8 @@ async def finalize_user_session(message, session_string, status_msg):
     try:
         temp_user = Client(
             "user_session_dynamic",
-            api_id=DEFAULT_API_ID,
-            api_hash=DEFAULT_API_HASH,
+            api_id=API_ID,
+            api_hash=API_HASH,
             session_string=session_string,
             in_memory=True
         )
@@ -148,12 +151,12 @@ async def finalize_user_session(message, session_string, status_msg):
         call_py = PyTgCalls(user)
         await call_py.start()
         
-        # يمكنك هنا حفظ الجلسة في ملف نصي إذا أردت ديمومة الحفظ
+        # حفظ الجلسة في ملف نصي تلقائياً
         with open("session.txt", "w") as f:
             f.write(session_string)
 
         await status_msg.edit_text(
-            "✅ **تم تسجيل الدخول واستخراج الجلسة وربط الحساب المساعد بنجاح تام!**\n\n"
+            "✅ **تم استخراج الجلسة وربط الحساب المساعد بنجاح تام!**\n\n"
             "• تم حفظ الجلسة في ملف `session.txt`.\n"
             "• الآن يمكنك استخدام البوت في المجموعات وبث الفيديوهات بالأمر `/play`.\n\n"
             f"👇 **كود الجلسة الخاص بك:**\n`{session_string}`"
@@ -213,7 +216,7 @@ async def callbacks(client, cq):
 async def main():
     await bot.start()
     print("-----------------------------------------")
-    print("✨ البوت يعمل الآن ويطلب رقم الهاتف فقط تفاعلياً! ✨")
+    print("✨ البوت يعمل الآن بالتوكن والبيانات الجديدة وجاهز! ✨")
     print("-----------------------------------------")
     await asyncio.gather(
         asyncio.Event().wait()
