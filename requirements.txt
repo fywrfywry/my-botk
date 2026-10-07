@@ -2,3 +2,6 @@ telethon
 aiohttp
 pysocks
 cryptg
+httpx
+requests
+beautifulsoup4
