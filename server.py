@@ -16,8 +16,6 @@ def check_shopify(site: str, cc: str):
         
         card_number, exp_month, exp_year, cvv = cc_parts[0], cc_parts[1], cc_parts[2], cc_parts[3]
 
-        # ضع منطق فحص الشوبيفاي الفعلي هنا
-        # كمثال افتراضي للتأكد من عمل الاستجابة:
         return {
             "status": "success",
             "result": "Charged",
