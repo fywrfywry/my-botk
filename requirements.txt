@@ -5,3 +5,6 @@ cryptg
 httpx
 requests
 beautifulsoup4
+aiofiles
+psutil
+python-dotenv
