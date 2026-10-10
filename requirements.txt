@@ -1,13 +1,2 @@
-telethon
-aiohttp
-pysocks
-cryptg
-httpx
-requests
-beautifulsoup4
-aiofiles
-psutil
-python-dotenv
-fastapi
-uvicorn
-
+python-telegram-bot==20.7
+requests==2.31.0
