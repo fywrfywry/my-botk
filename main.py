@@ -29,10 +29,14 @@ logger = logging.getLogger("ZefameBot")
 # ==============================================================================
 # 2. الثوابت والإعدادات الرئيسية (Configuration Constants)
 # ==============================================================================
-PROXY_URL = (
-    "http://name8nvk3l-pool-res.mobile.corp-country-US-state-4736286"
-    "-mode-query-tier-premium:SLRCvxnaZI5nIr0S@185.185.51.243:443"
-)
+# تفاصيل البروكسي السكني الخاص بك مفصولة بدقة لضمان عملها مع requests
+PROXY_HOST = "185.185.51.243"
+PROXY_PORT = "443"
+PROXY_USER = "name8nvk3l-pool-res.mobile.corp-country-US-state-4736286-mode-query-tier-premium"
+PROXY_PASS = "SLRCvxnaZI5nIr0S"
+
+# بناء رابط البروكسي القياسي مع المصادقة الصحيحة
+PROXY_URL = f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
 
 BOT_TOKEN = "8837027411:AAEj-ZenZmuTNvkwD6ppoWx5mS-rDR9fjuA"
 ADMIN_ID = 7352706784
@@ -52,6 +56,7 @@ class ZefameAutomatedBot:
         self.setup_proxy_and_headers()
 
     def setup_proxy_and_headers(self):
+        # تفعيل البروكسي بشكل صريح وقوي لضمان مرور حركة المرور عبره
         self.session.proxies = {
             "http": PROXY_URL,
             "https": PROXY_URL
@@ -73,12 +78,13 @@ class ZefameAutomatedBot:
 
     def check_current_ip(self) -> str:
         try:
+            # استخدام موقع بديل لفحص الـ IP والتأكد من تغيره عبر البروكسي
             response = self.session.get("https://api.ipify.org?format=json", timeout=10)
             if response.status_code == 200:
                 return response.json().get("ip", "غير معروف")
             return "تعذر استخراج IP"
         except Exception as err:
-            logger.error(f"خطأ أثناء فحص الـ IP: {err}")
+            logger.error(f"خطأ أثناء فحص الـ IP عبر البروكسي: {err}")
             return "تعذر الفحص"
 
     def extract_video_id(self, tiktok_link: str):
@@ -206,7 +212,7 @@ async def receive_loops(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     tiktok_link = context.user_data.get("tiktok_link")
     status_msg = await update.message.reply_text(
-        f"🚀 **بدء العملية:** جاري تجهيز إرسال ({loops}) محاولات لزيادة الإعجابات..."
+        f"🚀 **بدء العملية:** جاري تجهيز إرسال ({loops}) محاولات عبر البروكسي السكني..."
     )
 
     bot_engine = ZefameAutomatedBot(service_id=DEFAULT_SERVICE_ID)
@@ -214,7 +220,7 @@ async def receive_loops(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i in range(1, loops + 1):
         await status_msg.edit_text(
             f"🔄 **[المحاولة {i} من {loops}]**\n"
-            f"جاري تبديل IP وتنسيق الطلب عبر البروكسي السكني..."
+            f"جاري إرسال الطلب وسحب IP جديد عبر البروكسي..."
         )
 
         success, ip_used, detail = bot_engine.run_single_process(tiktok_link)
@@ -227,7 +233,7 @@ async def receive_loops(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             result_text = (
                 f"✅ **العملية ({i}/{loops}) تمت بنجاح!**\n"
-                f"🌐 **عنوان IP:** `{ip_used}`\n\n"
+                f"🌐 **عنوان IP (السكني):** `{ip_used}`\n\n"
                 f"📥 **الرد المباشر من السيرفر:**\n"
                 f"```json\n{formatted_response}\n```"
             )
@@ -242,7 +248,7 @@ async def receive_loops(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if i < loops:
             await status_msg.edit_text(
-                "⏳ **الانتظار 30 ثانية** لضمان تدوير البروكسي وتفادي الحظر..."
+                "⏳ **الانتظار 30 ثانية** لتدوير البروكسي والدورة التالية..."
             )
             await asyncio.sleep(30)
 
