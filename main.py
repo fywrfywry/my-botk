@@ -276,4 +276,14 @@ def main():
                 MessageHandler(filters.TEXT & (~filters.COMMAND), receive_loops)
             ],
         },
-        
+        fallbacks=[CommandHandler("cancel", cancel_command)],
+    )
+
+    app.add_handler(conv_handler)
+
+    logger.info("تم تسجيل المحادثات بنجاح. البوت جاهز للاستقبال.")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
