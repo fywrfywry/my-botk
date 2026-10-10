@@ -29,20 +29,16 @@ logger = logging.getLogger("ZefameBot")
 # ==============================================================================
 # 2. الثوابت والإعدادات الرئيسية (Configuration Constants)
 # ==============================================================================
-# بيانات البروكسي السكني المعتمد
 PROXY_URL = (
     "http://name8nvk3l-pool-res.mobile.corp-country-US-state-4736286"
     "-mode-query-tier-premium:SLRCvxnaZI5nIr0S@185.185.51.243:443"
 )
 
-# توكن البوت وأيدي المالك للحماية
 BOT_TOKEN = "8837027411:AAEj-ZenZmuTNvkwD6ppoWx5mS-rDR9fjuA"
 ADMIN_ID = 7352706784
 
-# أرقام الخدمات المتاحة في موقع Zefame
 DEFAULT_SERVICE_ID = "233"  # خدمة الإعجابات المجانية (Free Likes)
 
-# حالات محادثة التليجرام (Conversation States)
 GET_LINK, GET_LOOPS = range(2)
 
 
@@ -50,17 +46,12 @@ GET_LINK, GET_LOOPS = range(2)
 # 3. كلاس التعامل مع سيرفر Zefame (Zefame Engine Core)
 # ==============================================================================
 class ZefameAutomatedBot:
-    """
-    كلاس محاكاة أتمتة الطلبات لموقع Zefame مع دعم البروكسي السكني وتوليد الأجهزة.
-    """
-
     def __init__(self, service_id: str = DEFAULT_SERVICE_ID):
         self.service_id = str(service_id)
         self.session = requests.Session()
         self.setup_proxy_and_headers()
 
     def setup_proxy_and_headers(self):
-        """إعداد البروكسي ورؤوس الهيدرز المخصصة"""
         self.session.proxies = {
             "http": PROXY_URL,
             "https": PROXY_URL
@@ -80,8 +71,7 @@ class ZefameAutomatedBot:
             "sec-ch-ua-platform": '"Android"',
         })
 
-    def check_current_ip((self) -> str:
-        """فحصعنوان IP الحالي المستخدم عبر البروكسي"""
+    def check_current_ip(self) -> str:
         try:
             response = self.session.get("https://api.ipify.org?format=json", timeout=10)
             if response.status_code == 200:
@@ -92,7 +82,6 @@ class ZefameAutomatedBot:
             return "تعذر الفحص"
 
     def extract_video_id(self, tiktok_link: str):
-        """إرسال طلب فحص واستخراج ID الفيديو من الرابط"""
         url_check = "https://api.zefame.com/api_free.php?lang=fr"
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
         payload = {
@@ -128,7 +117,6 @@ class ZefameAutomatedBot:
             return None, str(ex)
 
     def execute_service_request(self, video_id: str, device_id: str):
-        """إرسال طلب زيادة الخدمة المحددة إلى API الخاص بالموقع"""
         url_service = "https://api.zefame.com/api_free.php"
         params = {
             "lang": "fr",
@@ -153,16 +141,13 @@ class ZefameAutomatedBot:
             return False, str(ex)
 
     def run_single_process(self, tiktok_link: str):
-        """إدارة دورة كاملة للطلب من الفحص وحتى التنفيذ"""
         device_id = str(uuid.uuid4())
         ip_addr = self.check_current_ip()
 
-        # الخطوة 1: استخراج ID الفيديو
         video_id, err_msg = self.extract_video_id(tiktok_link)
         if not video_id:
             return False, ip_addr, f"فشل استخراج الفيديو: {err_msg}"
 
-        # الخطوة 2: تنفيذ الطلب للخدمة
         success, service_result = self.execute_service_request(video_id, device_id)
         return success, ip_addr, service_result
 
@@ -171,7 +156,6 @@ class ZefameAutomatedBot:
 # 4. دوال التعامل مع أوامر بوت التليجرام (Telegram Handlers)
 # ==============================================================================
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """التعامل مع أمر البدء /start"""
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         await update.message.reply_text("❌ عذراً، هذا البوت محمي وخاص بالمالك فقط.")
@@ -180,4 +164,126 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "أهلاً بك يا مالك البوت 🚀\n\n"
         "✨ **نظام زيادة إعجابات تيك توك التلقائي (Zefame Free Likes)**\n\n"
-        "🔗
+        "🔗 يرجى إرسال **رابط فيديو TikTok** المطلوب:"
+    )
+    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    return GET_LINK
+
+
+async def receive_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        return ConversationHandler.END
+
+    link = update.message.text.strip()
+    if "tiktok.com" not in link:
+        await update.message.reply_text(
+            "⚠️ **الرابط غير صالح!**\nيرجى إرسال رابط فيديو تيك توك صحيح يحتوي على tiktok.com:"
+        )
+        return GET_LINK
+
+    context.user_data["tiktok_link"] = link
+    await update.message.reply_text(
+        "✅ **تم حفظ الرابط بنجاح.**\n\n"
+        "🔢 أدخل الآن **عدد المحاولات المطلوبة** (مثال: 5):"
+    )
+    return GET_LOOPS
+
+
+async def receive_loops(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        return ConversationHandler.END
+
+    text_input = update.message.text.strip()
+    try:
+        loops = int(text_input)
+        if loops <= 0:
+            raise ValueError()
+    except ValueError:
+        await update.message.reply_text("⚠️ يرجى إدخال رقم صحيح أكبر من الصفر:")
+        return GET_LOOPS
+
+    tiktok_link = context.user_data.get("tiktok_link")
+    status_msg = await update.message.reply_text(
+        f"🚀 **بدء العملية:** جاري تجهيز إرسال ({loops}) محاولات لزيادة الإعجابات..."
+    )
+
+    bot_engine = ZefameAutomatedBot(service_id=DEFAULT_SERVICE_ID)
+
+    for i in range(1, loops + 1):
+        await status_msg.edit_text(
+            f"🔄 **[المحاولة {i} من {loops}]**\n"
+            f"جاري تبديل IP وتنسيق الطلب عبر البروكسي السكني..."
+        )
+
+        success, ip_used, detail = bot_engine.run_single_process(tiktok_link)
+
+        if success:
+            if isinstance(detail, dict):
+                formatted_response = json.dumps(detail, indent=2, ensure_ascii=False)
+            else:
+                formatted_response = str(detail)
+
+            result_text = (
+                f"✅ **العملية ({i}/{loops}) تمت بنجاح!**\n"
+                f"🌐 **عنوان IP:** `{ip_used}`\n\n"
+                f"📥 **الرد المباشر من السيرفر:**\n"
+                f"```json\n{formatted_response}\n```"
+            )
+        else:
+            result_text = (
+                f"❌ **العملية ({i}/{loops}) لم تكتمل**\n"
+                f"🌐 **عنوان IP:** `{ip_used}`\n"
+                f"⚠️ **السبب:** `{detail}`"
+            )
+
+        await update.message.reply_text(result_text, parse_mode="Markdown")
+
+        if i < loops:
+            await status_msg.edit_text(
+                "⏳ **الانتظار 30 ثانية** لضمان تدوير البروكسي وتفادي الحظر..."
+            )
+            await asyncio.sleep(30)
+
+    await update.message.reply_text(
+        "✨ **اكتملت جميع المحاولات بنجاح!**\n"
+        "للبدء في مهمة جديدة أرسل /start"
+    )
+    return ConversationHandler.END
+
+
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚫 تم إلغاء العملية بنجاح.")
+    return ConversationHandler.END
+
+
+# ==============================================================================
+# 5. تشغيل البوت وإدارة التطبيق (Application Main Engine)
+# ==============================================================================
+def main():
+    logger.info("جاري بدء تشغيل بوت أتمتة Zefame...")
+
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start_command)],
+        states={
+            GET_LINK: [
+                MessageHandler(filters.TEXT & (~filters.COMMAND), receive_link)
+            ],
+            GET_LOOPS: [
+                MessageHandler(filters.TEXT & (~filters.COMMAND), receive_loops)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_command)],
+    )
+
+    app.add_handler(conv_handler)
+
+    logger.info("تم تسجيل المحادثات بنجاح. البوت جاهز للاستقبال.")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
